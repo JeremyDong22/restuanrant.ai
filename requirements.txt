@@ -1,0 +1,13 @@
+# Created by AI assistant: Added requests for image_direct_upload.py
+# Merged requirements from dzdp_crawler and xhs_crawler projects.
+
+pyautogui==0.9.54
+pyperclip==1.8.2
+Pillow==10.0.0
+python-dotenv==1.0.1  # Took higher version from xhs_crawler
+google-generativeai==0.3.1
+supabase==2.3.5      # Took higher version from xhs_crawler
+playwright==1.42.0
+json5==0.9.24
+tqdm==4.66.2
+requests # Added for image_direct_upload.py 

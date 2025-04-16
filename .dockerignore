@@ -1,0 +1,30 @@
+# Created by AI assistant. Specifies intentionally untracked files for Docker.
+# Added standard Python ignores like __pycache__, .env, venv, *.pyc, etc.
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv
+*.egg-info/
+.pytest_cache/
+.coverage
+build/
+dist/
+*.log
+*.swp
+*.swo
+.idea/
+.vscode/
+*.bak
+docker-compose.yml
+docker-compose.yaml
+Dockerfile
+README.md
+.git/
+.gitignore
+.dockerignore 

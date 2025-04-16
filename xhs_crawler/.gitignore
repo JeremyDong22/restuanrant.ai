@@ -1,0 +1,29 @@
+# Environment variables
+.env
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual Environment
+venv/
+env/
+
+# JSON data files
+*.json
+
+# Log files
+*.log
+
+# IDE files
+.vscode/
+.idea/
+
+# System files
+.DS_Store 
