@@ -11,7 +11,7 @@ import sys
 import subprocess # To run other scripts
 import config as main_config # Import config from the same directory
 # Import automation settings from config
-from config import RELOCATE_EMULATOR, GET_NEW_XHS_COOKIE, OPEN_NEW_BROWSER, PERFORM_CLEANUP 
+from config import RELOCATE_EMULATOR, GET_NEW_XHS_COOKIE, OPEN_NEW_BROWSER, PERFORM_CLEANUP, KILL_BROWSER_PROCESS
 import time # For sleeps and TIMER
 import json
 from datetime import datetime # For TIMER timestamp
@@ -155,22 +155,7 @@ if __name__ == "__main__":
 
         # --- Module 1: Preparation ---
         print("\n===== Module 1: Preparation =======")
-        print("1. Please load your Android emulator or iPhone mirroring.")
 
-        # Relocate emulator based on config
-        #confirm_locate = input(\"是否要重新定位模拟器? (y/N): \").strip().lower()
-        #if confirm_locate == 'y':
-        if RELOCATE_EMULATOR:
-            print("Proceeding with DZDP Location Setup based on config...")
-            # Then Locate DZDP Elements - Now uses the modified run_script
-            if not run_script(["Locate.py"], cwd=DZDP_CRAWLER_DIR, description="DZDP Location Setup"):
-                print("\nError during DZDP Locate.py. Please fix the issues and restart the pipeline. Exiting.")
-                sys.exit(1)
-            print("   DZDP locations recorded. \nIMPORTANT: Do NOT move the emulator window. \n请确保你在大众点评主页（程序自动定位）。")
-        else:
-            print("Skipping DZDP Location Setup based on config.")
-            print("   Assuming previous DZDP locations are still valid. \nIMPORTANT: Do NOT move the emulator window. \n请确保你已经在大众点评主页（程序自动定位）。")
-        
         # --- Ask user about XHS login status ---
         #skip_xhs_login = input(\"Is a browser already open and logged into Xiaohongshu? (yes/no): \").strip().lower()
         # Decide XHS steps based on config flags
@@ -200,11 +185,29 @@ if __name__ == "__main__":
         else:
             print("Skipping automated XHS login steps (GET_NEW_XHS_COOKIE=False and OPEN_NEW_BROWSER=False).")
             browser_proc = None
+    
+        print("At last, please load your Android emulator or iPhone mirroring.")
+
+        # Relocate emulator based on config
+        #confirm_locate = input(\"是否要重新定位模拟器? (y/N): \").strip().lower()
+        #if confirm_locate == 'y':
+        if RELOCATE_EMULATOR:
+            print("Proceeding with DZDP Location Setup based on config...")
+            # Then Locate DZDP Elements - Now uses the modified run_script
+            if not run_script(["Locate.py"], cwd=DZDP_CRAWLER_DIR, description="DZDP Location Setup"):
+                print("\nError during DZDP Locate.py. Please fix the issues and restart the pipeline. Exiting.")
+                sys.exit(1)
+            print("   DZDP locations recorded. \nIMPORTANT: Do NOT move the emulator window. \n请确保你在大众点评主页（程序自动定位）。")
+        else:
+            print("Skipping DZDP Location Setup based on config.")
+            print("   Assuming previous DZDP locations are still valid. \nIMPORTANT: Do NOT move the emulator window. \n请确保你已经在大众点评主页（程序自动定位）。")
 
         print("===== Module 1: Preparation Complete =====")
+        
         print("Keep you hands away from the keyboard and mouse until the pipeline is finished.")
-        print("Crawler starts in 3 seconds...")
-        time.sleep(3)
+        print("Crawler starts in 10 seconds...")
+        print("确保大众点评回到主页，期间不要移动镜像窗口，完成后不要移动鼠标键盘，爬取将在10秒后开始。")
+        time.sleep(10)
         
         # --- Module 2: DZDP Crawling (Keep capturing output) ---
         print("\n===== Module 2: DZDP Crawling =======")
@@ -270,6 +273,40 @@ if __name__ == "__main__":
         # Always attempt cleanup if PERFORM_CLEANUP is True
         if PERFORM_CLEANUP:
             print("Performing cleanup based on config (PERFORM_CLEANUP=True)...")
+
+            # Call main/clean.py
+            print("   Attempting to run main/clean.py...")
+            try:
+                # Construct the path to clean.py relative to main.py
+                main_dir = os.path.dirname(__file__)
+                clean_script_path = os.path.join(main_dir, 'clean.py')
+                clean_script_path = os.path.normpath(clean_script_path) # Normalize path
+
+                if os.path.exists(clean_script_path):
+                     # Use sys.executable to ensure the correct python interpreter
+                    # Ensure cwd is the directory containing clean.py for relative paths within clean.py
+                    result = subprocess.run(
+                        [sys.executable, clean_script_path],
+                        check=True, capture_output=True, text=True, cwd=main_dir
+                    )
+                    print(f"   main/clean.py executed successfully.")
+                    # Log output if needed
+                    # if result.stdout:
+                    #     print(f"      Output:\n{result.stdout.strip()}")
+                    # if result.stderr:
+                    #      print(f"      Errors:\n{result.stderr.strip()}") # Should be empty if check=True passed
+                else:
+                    print(f"   Error: clean.py not found at {clean_script_path}")
+
+            except subprocess.CalledProcessError as cpe:
+                 print(f"   Error executing main/clean.py: Process returned non-zero exit code {cpe.returncode}")
+                 print(f"      Stdout: {cpe.stdout.strip()}")
+                 print(f"      Stderr: {cpe.stderr.strip()}")
+            except Exception as clean_err:
+                print(f"   Error running main/clean.py: {clean_err}")
+
+        if KILL_BROWSER_PROCESS:
+            print("Performing cleanup based on config (KILL_BROWSER_PROCESS=True)...")
             if browser_proc:
                 print("   Terminating background browser process...")
                 try:
@@ -283,13 +320,15 @@ if __name__ == "__main__":
                 except Exception as term_err:
                     print(f"   Error terminating browser process: {term_err}")
             
-            # Example: Add command to close emulator if needed (adjust command as necessary)
-            # print(\"   Attempting to close emulator (example - adjust command)...\")
+            
+
+            # Example: Add command to close emulator if needed (existing commented code)
+            # print("   Attempting to close emulator (example - adjust command)...")
             # try:
             #    subprocess.run(["adb", "emu", "kill"], check=True, capture_output=True)
-            #    print(\"   Emulator close command sent.\")
+            #    print("   Emulator close command sent.")
             # except Exception as emu_err:
-            #    print(f\"   Error closing emulator: {emu_err}\")
+            #    print(f"   Error closing emulator: {emu_err}")
             
             print("Cleanup attempt finished.")
         else:
@@ -326,19 +365,19 @@ if __name__ == "__main__":
             print(f"Error writing to log file {LOG_FILE_PATH}: {log_e}")
 
         # --- Background Process Cleanup ---
-        if browser_proc and browser_proc.poll() is None: # Check if process exists and is running
-            print("\nTerminating background browser process...")
-            try:
-                browser_proc.terminate() # Send SIGTERM first
-                browser_proc.wait(timeout=5) # Wait a bit for graceful exit
-                print("Background browser process terminated.")
-            except subprocess.TimeoutExpired:
-                print("Browser process did not terminate gracefully, forcing kill...")
-                browser_proc.kill() # Force kill if terminate didn't work
-                browser_proc.wait()
-                print("Background browser process killed.")
-            except Exception as term_e:
-                print(f"Error terminating background browser process: {term_e}")
+        #if browser_proc and browser_proc.poll() is None: # Check if process exists and is running
+        #    print("\nTerminating background browser process...")
+        #    try:
+        #        browser_proc.terminate() # Send SIGTERM first
+        #    browser_proc.wait(timeout=5) # Wait a bit for graceful exit
+        #    print("Background browser process terminated.")
+        #    except subprocess.TimeoutExpired:
+        #        print("Browser process did not terminate gracefully, forcing kill...")
+        #        browser_proc.kill() # Force kill if terminate didn't work
+        #        browser_proc.wait()
+        #        print("Background browser process killed.")
+        #    except Exception as term_e:
+        #        print(f"Error terminating background browser process: {term_e}")
 
         print("=======================================")
         print("======= Pipeline Controller END =======")
