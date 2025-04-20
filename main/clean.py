@@ -53,16 +53,9 @@ def main():
     for dir_path in DIRS_TO_CLEAN:
         print(f"  - {dir_path}")
     
-    # Double-check with the user
-    confirm = input("Are you sure you want to proceed? (y/N): ").strip().lower()
-    
-    if confirm == 'y':
-        print("\nProceeding with cleanup...")
-        for dir_path in DIRS_TO_CLEAN:
-            clean_directory(dir_path)
-        print("\nCleanup finished.")
-    else:
-        print("\nCleanup cancelled by user.")
+    for dir_path in DIRS_TO_CLEAN:
+        clean_directory(dir_path)
+    print("\nCleanup finished.")
 
 if __name__ == "__main__":
     main() 

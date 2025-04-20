@@ -20,7 +20,7 @@ SELECTED_RANKINGS = [
 # 所有备选城市：上海，深圳，成都，重庆，长沙
 CITIES = [#"上海",
           #"深圳",
-          "成都",
+          #"成都",
           #"重庆",
           #"长沙"
           ]
@@ -36,10 +36,11 @@ GET_NEW_XHS_COOKIE = False
 
 # Set to True to open a new permanent browser window for Xiaohongshu interaction, False otherwise.
 # Normally, we turn it on for the first time we run the pipeline, the browser will be opened in the background.
-OPEN_NEW_BROWSER = True
+OPEN_NEW_BROWSER = False
 
 # Set to True to perform cleanup operations (e.g., closing emulator/browser) at the end, False to skip.
 # Normally, we want to perform cleanup at the end of the pipeline.
-PERFORM_CLEANUP = True
+PERFORM_CLEANUP = True 
+KILL_BROWSER_PROCESS = False
 
 # !!!save after editing!!!
