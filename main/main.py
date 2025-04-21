@@ -116,8 +116,14 @@ def update_dzdp_cities():
 
         if start_line != -1 and end_line != -1:
             # Construct the new list string
-            formatted_cities = [f'    "{city.replace("\"", "\\\"")}",' # Comma moved outside f-string
-                              for city in target_cities]
+            formatted_cities = []
+            for city in target_cities:
+                # Escape quotes needed for the string literal in the target file
+                escaped_city = city.replace('"', '\\"') # Simpler escaping for replace
+                # Now use the result in the f-string (no backslashes in the expression part)
+                formatted_city_string = f'    "{escaped_city}",' # Correct f-string syntax
+                formatted_cities.append(formatted_city_string)
+
             new_cities_content = "search_cities = [\n" + '\n'.join(formatted_cities) + "\n]"
             
             # Add comment indicating it was updated

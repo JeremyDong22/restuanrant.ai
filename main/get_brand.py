@@ -129,8 +129,14 @@ def apply_to_xhs_config(brand_list):
             # Construct the new list string
             # Ensure proper quoting for brand names containing spaces or special chars
             # Also ensure each item ends with a comma for valid Python list syntax
-            formatted_brands = [f'    "{brand.replace("\"", "\\\"")}",' # Comma moved outside the f-string
-                              for brand in brand_list]
+            formatted_brands = []
+            for brand in brand_list:
+                # Escape quotes needed for the string literal in the target file
+                escaped_brand = brand.replace('"', '\\"')
+                # Now use the result in the f-string (no backslashes in the expression part)
+                formatted_brand_string = f'    "{escaped_brand}",'
+                formatted_brands.append(formatted_brand_string)
+
             new_brands_content = "BRANDS = [\n" + '\n'.join(formatted_brands) + "\n]"
             
             # Add comment indicating it was updated

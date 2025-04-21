@@ -140,4 +140,4 @@ browser_data/
 *.gif
 *.bmp
 *.tiff
-*.ico
+*.ico.venv311/
