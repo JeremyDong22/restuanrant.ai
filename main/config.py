@@ -18,9 +18,9 @@ SELECTED_RANKINGS = [
 
 # List of cities (城市名称) for the dzdp_crawler to process.
 # 所有备选城市：上海，深圳，成都，重庆，长沙
-CITIES = [#"上海",
+CITIES = ["武汉",
           #"深圳",
-          #"成都",
+          "成都"
           #"重庆",
           #"长沙"
           ]
@@ -32,11 +32,11 @@ RELOCATE_EMULATOR = False
 
 # Set to True to automatically obtain a new Xiaohongshu cookie, False to use existing.
 # Normally, we turn it on for the first time we run the pipeline.
-GET_NEW_XHS_COOKIE = False
+GET_NEW_XHS_COOKIE = True
 
 # Set to True to open a new permanent browser window for Xiaohongshu interaction, False otherwise.
 # Normally, we turn it on for the first time we run the pipeline, the browser will be opened in the background.
-OPEN_NEW_BROWSER = False
+OPEN_NEW_BROWSER = True
 
 # Set to True to perform cleanup operations (e.g., closing emulator/browser) at the end, False to skip.
 # Normally, we want to perform cleanup at the end of the pipeline.
