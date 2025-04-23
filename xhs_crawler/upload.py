@@ -210,9 +210,11 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
         brand_id_map = {} # Use an empty map to avoid errors later
 
     posts_to_insert = []
+    posts_to_update = [] # 新增：存储需要更新的已有帖子
     post_brand_relations_to_insert = []
     processed_count = 0
     skipped_duplicates = 0
+    update_count = 0 # 新增：记录更新的帖子数量
 
     print("Processing records: filtering duplicates, formatting data, generating image URLs...")
     for record in tqdm(data, desc="Processing records"):
@@ -223,10 +225,11 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
             print(f"Warning: Record missing note_id. Skipping: {record.get('title', 'N/A')}")
             continue
 
-        # --- Deduplication Check ---
-        if note_id in existing_post_ids:
+        # --- Deduplication Check (Only for posts, not for brand relations) ---
+        is_duplicate = note_id in existing_post_ids
+        if is_duplicate:
             skipped_duplicates += 1
-            continue # Skip this record as it's already in the database
+            # 记录这是一个重复帖子，但继续处理以处理潜在的新品牌关联和更新动态信息
         # --- End Deduplication Check ---
 
         # --- Prepare Post Data ---
@@ -263,10 +266,24 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
             "collections": int(record.get("collections", 0)) if record.get("collections") is not None else None,
             "comments": int(record.get("comments", 0)) if record.get("comments") is not None else None,
         }
-        posts_to_insert.append(post_payload)
+        
+        # 新增：为已存在的帖子创建简化的更新载荷（只包含动态变化的数据）
+        if is_duplicate:
+            update_payload = {
+                "note_id": note_id, # 主键，用于匹配
+                "likes": int(record.get("likes", 0)) if record.get("likes") is not None else None,
+                "collections": int(record.get("collections", 0)) if record.get("collections") is not None else None,
+                "comments": int(record.get("comments", 0)) if record.get("comments") is not None else None,
+            }
+            posts_to_update.append(update_payload)
+            update_count += 1
+        else:
+            # 新帖子完整插入
+            posts_to_insert.append(post_payload)
         # --- End Prepare Post Data ---
 
         # --- Prepare Post-Brand Relation Data ---
+        # 不管帖子是否存在，都处理品牌关联
         brand_name = record.get("brand")
         if brand_name:
             # Use lowercased stripped key for lookup
@@ -278,12 +295,16 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
                     "brand_id": brand_id # Matches brand.brand_id
                 }
                 post_brand_relations_to_insert.append(post_brand_payload)
+                if is_duplicate:
+                    print(f"Note: Creating new brand relation for existing post {note_id} with brand '{brand_name}' (ID: {brand_id})")
             else:
                 # Use lookup_key (lower, stripped) in warning message for clarity
                 print(f"Warning: Brand ID not found for brand '{lookup_key}' (original: '{brand_name}') in record with note_id '{note_id}'. No post_brand relation created.")
         # --- End Prepare Post-Brand Relation Data ---
 
-    print(f"Processing complete. Found {len(posts_to_insert)} new posts to insert. Skipped {skipped_duplicates} duplicates.")
+    print(f"Processing complete. Found {len(posts_to_insert)} new posts to insert and {update_count} existing posts to update.")
+    print(f"Skipped {skipped_duplicates} duplicates (but will update their dynamic data).")
+    print(f"Created {len(post_brand_relations_to_insert)} post-brand relations (including relations for existing posts).")
 
     # --- Batch Upload Posts ---
     total_posts = len(posts_to_insert)
@@ -314,6 +335,35 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
             # with open("failed_post_uploads.json", 'w', encoding='utf-8') as f:
             #     json.dump(failed_posts, f, ensure_ascii=False, indent=4)
 
+    # --- Update Existing Posts (Dynamic Data) ---
+    # 新增：更新已有帖子的动态信息
+    total_updates = len(posts_to_update)
+    updated_posts_count = 0
+    failed_updates = []
+    if total_updates > 0:
+        print(f"Updating {total_updates} existing records in Supabase table '{POSTS_TABLE_NAME}'...")
+        num_batches = math.ceil(total_updates / BATCH_SIZE)
+        for i in tqdm(range(num_batches), desc=f"Updating post batches"):
+            batch = posts_to_update[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
+            try:
+                for post in batch:
+                    note_id = post.get('note_id')
+                    if note_id:
+                        # 使用update而非upsert，因为我们确定记录已存在
+                        update_data = {k: v for k, v in post.items() if k != 'note_id'}
+                        result = supabase.table(POSTS_TABLE_NAME).update(update_data).eq('note_id', note_id).execute()
+                        if result.data:
+                            updated_posts_count += len(result.data)
+                        elif hasattr(result, 'error') and result.error:
+                            print(f"API Error updating post {note_id}: {result.error}")
+                            failed_updates.append(post)
+            except Exception as e:
+                print(f"Exception updating post batch {i + 1}/{num_batches}: {e}")
+                failed_updates.append(batch)
+        print(f"Updated {updated_posts_count} existing posts successfully.")
+        if failed_updates:
+            print(f"Failed to update {len(failed_updates)} posts.")
+            
     # --- Batch Upload Post-Brand Relations ---
     total_relations = len(post_brand_relations_to_insert)
     uploaded_relations_count = 0
@@ -344,7 +394,7 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
             # with open("failed_relation_uploads.json", 'w', encoding='utf-8') as f:
             #     json.dump(failed_relations, f, ensure_ascii=False, indent=4)
 
-    return uploaded_posts_count, uploaded_relations_count
+    return uploaded_posts_count + updated_posts_count, uploaded_relations_count
 
 def main():
     """Main function to find JSON files, fetch mappings/existing IDs, process, and upload data."""

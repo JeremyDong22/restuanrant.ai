@@ -10,7 +10,7 @@ import time
 # 基础配置
 # 要搜索的城市 - 这个在main/main.py中被设置
 search_cities = [
-    "重庆",
+    "深圳",
 ] # Updated by main/main.py
 main_ranking_scroll_times = 9  # 主榜单下滑次数
 category_ranking_scroll_times = 3  # 细分品类榜单下滑次数
