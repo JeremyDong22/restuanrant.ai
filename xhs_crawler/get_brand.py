@@ -1,18 +1,28 @@
-# Updated by AI assistant: Reverted to direct import for config.
-# Updated by AI assistant: Changed main.config import to relative.
-# Updated by AI assistant: Removed refresh_brand_table function.
-# main/get_brand.py
+# Created by AI assistant.
+# xhs_crawler/get_brand.py
+# Moved from main/get_brand.py to xhs_crawler/get_brand.py.
+# Fixed import of main/config.py to correctly access SELECTED_RANKINGS.
 # Contains functions to:
 # 1. Get a unique list of brands from selected rankings in 'dzdpdata'.
 # 2. Update the BRANDS list in xhs_crawler/config.py.
 
 import os
 import sys
+import traceback # Keep for error handling
 from dotenv import load_dotenv
 from supabase import create_client, Client
-import config as main_config # Import the config directly from the same directory
 import re # For apply_to_xhs_config
-import traceback # Keep for error handling
+
+# Import config from main directory - use absolute path to ensure correct import
+main_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'main'))
+sys.path.insert(0, main_dir)  # Insert at beginning of path to ensure it's found first
+try:
+    import config as main_config
+    print(f"Successfully imported main config from {main_dir}")
+    print(f"Available rankings: {main_config.SELECTED_RANKINGS if hasattr(main_config, 'SELECTED_RANKINGS') else 'SELECTED_RANKINGS not found'}")
+except ImportError as e:
+    print(f"Error importing main config: {e}")
+    sys.exit(1)
 
 # --- Supabase Client Initialization ---
 def get_supabase_client():
@@ -45,6 +55,13 @@ def get_selected_brands():
     """Gets unique brand names from dzdpdata based on SELECTED_RANKINGS in main/config.py
        and the most recent create_date in the dzdpdata table."""
     print("\n--- Getting Selected Brands for XHS (Latest Date) --- ")
+    
+    # Ensure SELECTED_RANKINGS exists in main_config
+    if not hasattr(main_config, 'SELECTED_RANKINGS'):
+        print("Error: SELECTED_RANKINGS not found in main/config.py")
+        print("Available attributes in main_config:", dir(main_config))
+        return []
+        
     selected_rankings = main_config.SELECTED_RANKINGS
     if not selected_rankings:
         print("Warning: No rankings specified in main/config.py. Returning empty list.")
@@ -93,7 +110,7 @@ def apply_to_xhs_config(brand_list):
         print("Error: Input must be a list of brand names.")
         return False
 
-    xhs_config_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'xhs_crawler', 'config.py'))
+    xhs_config_path = os.path.join(os.path.dirname(__file__), 'config.py')
     print(f"Target XHS config file: {xhs_config_path}")
 
     if not os.path.exists(xhs_config_path):
@@ -134,7 +151,7 @@ def apply_to_xhs_config(brand_list):
             new_brands_content = "BRANDS = [\n" + '\n'.join(formatted_brands) + "\n]"
             
             # Add comment indicating it was updated
-            new_brands_content += " # Updated by main/get_brand.py\n"
+            new_brands_content += " # Updated by xhs_crawler/get_brand.py\n"
 
             # Replace the old list definition
             new_lines = lines[:start_line] + [new_brands_content] + lines[end_line+1:]
@@ -157,13 +174,11 @@ def apply_to_xhs_config(brand_list):
 if __name__ == "__main__":
     print("Running Brand Processing Script (Get & Apply)...")
     
-    # Step 1 (Removed): Refresh the brand table. Run main/refresh.py separately if needed.
-    
-    # Step 2: Get brands from selected rankings
+    # Step 1: Get brands from selected rankings
     print("\nStep 1: Getting selected brands...")
     selected_brands = get_selected_brands()
     
-    # Step 3: Apply the selected brands to the XHS config
+    # Step 2: Apply the selected brands to the XHS config
     if selected_brands: # Only apply if we got some brands
         print("\nStep 2: Applying brands to XHS config...")
         success = apply_to_xhs_config(selected_brands)

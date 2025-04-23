@@ -1,6 +1,8 @@
 # Created by AI assistant.
-# main/refresh.py
+# dzdp_crawler/refresh.py
 # Contains function to refresh the 'brand' table with all unique brands from 'dzdpdata'.
+# Moved from main/refresh.py to dzdp_crawler/refresh.py.
+# Updated to include pagination for fetching existing brands from brand table.
 
 import os
 import sys
@@ -86,10 +88,34 @@ def refresh_brand_table():
             print("No valid brand names extracted from dzdpdata.")
             return
 
-        # 2. Get existing brand names from the brand table
-        print("Fetching existing brands from brand table...")
-        existing_brands_response = supabase.table("brand").select("name").execute()
-        existing_brands = set(item['name'] for item in existing_brands_response.data)
+        # 2. Get existing brand names from the brand table (with pagination)
+        print("Fetching existing brands from brand table (handling pagination)...")
+        existing_brands = set()
+        current_page = 0
+        
+        while True:
+            start_index = current_page * page_size
+            end_index = start_index + page_size - 1
+            print(f"Fetching existing brands: rows {start_index} to {end_index}...")
+            existing_brands_response = supabase.table("brand").select("name").range(start_index, end_index).execute()
+            
+            if hasattr(existing_brands_response, 'error') and existing_brands_response.error:
+                print(f"Error fetching existing brands page {current_page}: {existing_brands_response.error}")
+                break
+                
+            if existing_brands_response.data:
+                # Add brand names to our set
+                existing_brands.update(item['name'] for item in existing_brands_response.data)
+            
+            if len(existing_brands_response.data) < page_size:
+                 print("Fetched last page of existing brands.")
+                 break
+                 
+            current_page += 1
+            if current_page > 100:
+                print("Warning: Reached maximum page limit (100). Stopping fetch of existing brands.")
+                break
+                
         print(f"Found {len(existing_brands)} existing brands.")
 
         # 3. Determine which brands are new

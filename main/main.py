@@ -1,6 +1,7 @@
 # Updated by AI assistant: Replaced interactive prompts with configuration settings from main/config.py for full automation.
 # Updated by AI assistant: Added user prompt to skip XHS login steps if already logged in.
 # Updated by AI assistant: Modified run_script to stream output directly.
+# Updated by AI assistant: Updated refresh.py and get_brand.py paths to dzdp_crawler and xhs_crawler folders respectively.
 # Created by AI assistant.
 # main/main.py
 # Main controller script for the pipeline.
@@ -20,8 +21,8 @@ from pathlib import Path
 # Define paths relative to this script's location
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent # Assuming main.py is in a subdirectory like 'main'
-DZDP_CRAWLER_DIR = PROJECT_ROOT / "DZDP_crawler"
-XHS_CRAWLER_DIR = PROJECT_ROOT / "XHS_crawler"
+DZDP_CRAWLER_DIR = PROJECT_ROOT / "dzdp_crawler"
+XHS_CRAWLER_DIR = PROJECT_ROOT / "xhs_crawler"
 DZDP_CONFIG_PATH = os.path.join(DZDP_CRAWLER_DIR, 'Config.py')
 LOG_FILE_PATH = SCRIPT_DIR / "timer_log.txt" # Define log file path
 
@@ -235,16 +236,16 @@ if __name__ == "__main__":
         # Run refresh and get_brand sequentially for simplicity first
         # Async/parallel execution can be added later if needed and beneficial
         print("\nStep 3.1a: Refreshing Brand Table...")
-        # Now uses the modified run_script
-        if not run_script(["refresh.py"], cwd=SCRIPT_DIR, description="Brand Table Refresh"):
+        # Now uses the modified run_script with updated path to dzdp_crawler
+        if not run_script(["refresh.py"], cwd=DZDP_CRAWLER_DIR, description="Brand Table Refresh"):
             print("Error refreshing brand table. XHS crawl might use outdated brands.")
             # Decide whether to stop or continue with potentially stale brands
         else:
             print("Brand table refreshed.")
 
         print("\nStep 3.1b: Getting brands and updating XHS config...")
-        # Now uses the modified run_script
-        if not run_script(["get_brand.py"], cwd=SCRIPT_DIR, description="Get Brands & Update XHS Config"):
+        # Now uses the modified run_script with updated path to xhs_crawler
+        if not run_script(["get_brand.py"], cwd=XHS_CRAWLER_DIR, description="Get Brands & Update XHS Config"):
             print("Error getting brands or updating XHS config. Stopping XHS module.")
         else:
             print("XHS config updated.")
