@@ -1,3 +1,5 @@
+# Updated by AI assistant: 增加了日志记录功能，能够捕获所有控制台输出并保存到文件
+# Updated by AI assistant: 添加了更详细的执行时间统计，记录各模块的运行时间
 # Updated by AI assistant: Replaced interactive prompts with configuration settings from main/config.py for full automation.
 # Updated by AI assistant: Added user prompt to skip XHS login steps if already logged in.
 # Updated by AI assistant: Modified run_script to stream output directly.
@@ -17,6 +19,7 @@ import time # For sleeps and TIMER
 import json
 from datetime import datetime # For TIMER timestamp
 from pathlib import Path
+import logger # 导入日志模块
 
 # Define paths relative to this script's location
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -25,12 +28,18 @@ DZDP_CRAWLER_DIR = PROJECT_ROOT / "dzdp_crawler"
 XHS_CRAWLER_DIR = PROJECT_ROOT / "xhs_crawler"
 DZDP_CONFIG_PATH = os.path.join(DZDP_CRAWLER_DIR, 'Config.py')
 LOG_FILE_PATH = SCRIPT_DIR / "timer_log.txt" # Define log file path
+DETAILED_LOG_PATH = PROJECT_ROOT / "logs" / "pipeline.log" # 详细日志路径
+
+# 模块执行时间字典，记录各模块花费的时间
+module_times = {}
 
 def run_script(command, cwd, description):
     """
     Helper function to run a script using subprocess and stream its output.
     Handles errors.
     """
+    module_start_time = time.monotonic() # 记录模块开始时间
+    
     executable_command = [sys.executable] + command
     print(f"\n--- Running: {description} --- ")
     print(f"Command: {' '.join(executable_command)}")
@@ -39,6 +48,15 @@ def run_script(command, cwd, description):
         # Run and let the output stream directly to the console
         process = subprocess.run(executable_command, check=True, cwd=cwd, text=True, encoding='utf-8')
         print(f"--- Finished: {description} (Exit Code: {process.returncode}) --- ")
+        
+        # 计算并记录模块执行时间
+        module_end_time = time.monotonic()
+        module_duration = module_end_time - module_start_time
+        module_times[description] = module_duration
+        hours, remainder = divmod(module_duration, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        print(f"--- {description} execution time: {int(hours)}时{int(minutes)}分{seconds:.2f}秒 ---")
+        
         return True
     except FileNotFoundError:
         script_name = command[0] if command else "<unknown script>"
@@ -144,12 +162,19 @@ def update_dzdp_cities():
 
 # --- Main Pipeline Execution ---
 if __name__ == "__main__":
-    start_time = time.monotonic() # Record start time for duration calculation
-    start_timestamp = datetime.now().strftime("%Y/%m/%d/%H/%M/%S")
-    print(f"Pipeline started at: {start_timestamp}")
+    # 设置日志记录
+    log_dir = PROJECT_ROOT / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    pipeline_logger = logger.setup_logger(DETAILED_LOG_PATH)
 
-    browser_proc = None # Initialize browser process variable
     try:
+        start_time = time.monotonic() # Record start time for duration calculation
+        start_timestamp = datetime.now().strftime("%Y/%m/%d/%H/%M/%S")
+        print(f"Pipeline started at: {start_timestamp}")
+        print(f"详细日志将记录到: {DETAILED_LOG_PATH}")
+
+        browser_proc = None # Initialize browser process variable
+
         print("=======================================")
         print("=== Starting Pipeline Controller ====")
         print("=======================================")
@@ -158,6 +183,8 @@ if __name__ == "__main__":
 
         # --- Module 3: XHS Crawling (Keep capturing output) ---
         print("\n===== Module 3: XHS Crawling =======")
+        module3_start_time = time.monotonic()
+        
         # Step 3.1: refresh brand table and get brands for config
         # Run refresh and get_brand sequentially for simplicity first
         # Async/parallel execution can be added later if needed and beneficial
@@ -192,11 +219,18 @@ if __name__ == "__main__":
                     else:
                         print("XHS Crawling Module Completed Successfully.")
 
-
-        print("===== Module 3: XHS Crawling & Image Upload Complete =====")
+        # 记录模块3的总执行时间
+        module3_end_time = time.monotonic()
+        module3_duration = module3_end_time - module3_start_time
+        module_times["Module 3: XHS Crawling"] = module3_duration
+        hours, remainder = divmod(module3_duration, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        print(f"===== Module 3: XHS Crawling Complete - 执行时间: {int(hours)}时{int(minutes)}分{seconds:.2f}秒 =====")
 
         # --- Module 4: Cleanup (Conditional based on config) ---
         print("\n===== Module 4: Cleanup =======")
+        module4_start_time = time.monotonic()
+        
         # Always attempt cleanup if PERFORM_CLEANUP is True
         if PERFORM_CLEANUP:
             print("Performing cleanup based on config (PERFORM_CLEANUP=True)...")
@@ -246,20 +280,16 @@ if __name__ == "__main__":
                     print("   Browser process killed.")
                 except Exception as term_err:
                     print(f"   Error terminating browser process: {term_err}")
-            
-            
-
-            # Example: Add command to close emulator if needed (existing commented code)
-            # print("   Attempting to close emulator (example - adjust command)...")
-            # try:
-            #    subprocess.run(["adb", "emu", "kill"], check=True, capture_output=True)
-            #    print("   Emulator close command sent.")
-            # except Exception as emu_err:
-            #    print(f"   Error closing emulator: {emu_err}")
-            
-            print("Cleanup attempt finished.")
         else:
              print("Skipping cleanup based on config (PERFORM_CLEANUP=False).")
+        
+        # 记录模块4的总执行时间
+        module4_end_time = time.monotonic()
+        module4_duration = module4_end_time - module4_start_time
+        module_times["Module 4: Cleanup"] = module4_duration
+        hours, remainder = divmod(module4_duration, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        print(f"===== Module 4: Cleanup Complete - 执行时间: {int(hours)}时{int(minutes)}分{seconds:.2f}秒 =====")
         
         print("=======================================")
         print("======= Pipeline Controller END =======")
@@ -284,27 +314,34 @@ if __name__ == "__main__":
         print(f"\nPipeline ended at: {end_timestamp}")
         print(f"Total execution time: {duration_str}")
         
+        # 打印详细的模块执行时间统计
+        print("\n=== 各模块执行时间统计 ===")
+        for module_name, module_duration in module_times.items():
+            hours, remainder = divmod(module_duration, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            print(f"{module_name}: {int(hours)}时{int(minutes)}分{seconds:.2f}秒")
+        
+        # 记录到timer_log.txt
         try:
             with open(LOG_FILE_PATH, 'a', encoding='utf-8') as f:
                 f.write(log_entry)
+                
+                # 添加详细的模块执行时间统计
+                f.write("\n=== 各模块执行时间统计 ===\n")
+                for module_name, module_duration in module_times.items():
+                    hours, remainder = divmod(module_duration, 3600)
+                    minutes, seconds = divmod(remainder, 60)
+                    f.write(f"{module_name}: {int(hours)}时{int(minutes)}分{seconds:.2f}秒\n")
+                f.write("\n")
+                
             print(f"Execution time logged to: {LOG_FILE_PATH}")
         except Exception as log_e:
             print(f"Error writing to log file {LOG_FILE_PATH}: {log_e}")
 
-        # --- Background Process Cleanup ---
-        #if browser_proc and browser_proc.poll() is None: # Check if process exists and is running
-        #    print("\nTerminating background browser process...")
-        #    try:
-        #        browser_proc.terminate() # Send SIGTERM first
-        #    browser_proc.wait(timeout=5) # Wait a bit for graceful exit
-        #    print("Background browser process terminated.")
-        #    except subprocess.TimeoutExpired:
-        #        print("Browser process did not terminate gracefully, forcing kill...")
-        #        browser_proc.kill() # Force kill if terminate didn't work
-        #        browser_proc.wait()
-        #        print("Background browser process killed.")
-        #    except Exception as term_e:
-        #        print(f"Error terminating background browser process: {term_e}")
+        # 停止日志记录
+        if 'pipeline_logger' in locals():
+            print("正在关闭详细日志记录...")
+            pipeline_logger.stop_logging()
 
         print("=======================================")
         print("======= Pipeline Controller END =======")
