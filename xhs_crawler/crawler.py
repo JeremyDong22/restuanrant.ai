@@ -3,7 +3,7 @@
 # Changes:
 # - Modified save_data_to_json to save only the current brand's data, overwriting existing file.
 # - Added _wait_randomly method and calls for anti-detection.
-# - Improved note_id extraction and handling.
+# - Improved post_id extraction and handling.
 # - Added intra-brand deduplication in crawl_posts.
 # - Corrected data directory path to be relative to the script file (xhs_crawler/data).
 # - Removed brand-based pause logic.
@@ -278,7 +278,7 @@ class XHSCrawler:
     async def extract_post_data(self, post_element, data_index):
         """Extract basic data from a post card using ElementHandle methods."""
         post_data = {"brand": self.current_brand, "data_index": data_index, "likes": 0}
-        note_id_for_error = f"brand_{self.current_brand}_idx_{data_index}" # Default identifier
+        post_id_for_error = f"brand_{self.current_brand}_idx_{data_index}" # Default identifier
 
         # --- Time/Click Limit Check --- BEFORE attempting to click/open
         try:
@@ -382,7 +382,7 @@ class XHSCrawler:
             return None
         
         post_detail = {}
-        note_id_for_error = "unknown"
+        post_id_for_error = "unknown"
         detail_page_selector = "div.note-detail-mask"
         cover_element = None # Define for potential cleanup
         
@@ -412,23 +412,23 @@ class XHSCrawler:
             print("Note detail mask appeared.")
             
             # Extract note ID from the mask attribute if possible, fallback to URL
-            note_id = await detail_mask.get_attribute("note-id")
-            if not note_id:
-                 print("Could not get note-id from mask attribute, trying URL.")
+            post_id = await detail_mask.get_attribute("post-id")
+            if not post_id:
+                 print("Could not get post-id from mask attribute, trying URL.")
                  try:
                       await self.page.wait_for_url("**/discovery/item/**", timeout=5000)
                       current_url = self.page.url
-                      note_id = current_url.split('/item/')[-1].split('?')[0] if '/item/' in current_url else None
+                      post_id = current_url.split('/item/')[-1].split('?')[0] if '/item/' in current_url else None
                  except Exception:
                       print("Timeout waiting for item URL.")
-                      note_id = None
-                 if not note_id:
-                      print("Could not extract note_id from URL either.")
-                      note_id = f"unknown_{datetime.now().timestamp()}" 
+                      post_id = None
+                 if not post_id:
+                      print("Could not extract post_id from URL either.")
+                      post_id = f"unknown_{datetime.now().timestamp()}" 
                       
-            note_id_for_error = note_id 
-            post_detail["note_id"] = note_id
-            print(f"Note ID: {note_id}")
+            post_id_for_error = post_id 
+            post_detail["post_id"] = post_id
+            print(f"Post ID: {post_id}")
             
             # --- Refined Content Extraction (Hashtag part removed) --- 
             content_element = detail_mask.locator('#detail-desc') 
@@ -500,7 +500,7 @@ class XHSCrawler:
                  # Fallback if engage-bar not found
                  counts_area = detail_mask.locator("div.action-container")
                  if await counts_area.count() == 0:
-                     print(f"Note {note_id_for_error}: Could not find counts area (engage-bar or action-container). Counts will be 0.")
+                     print(f"Post {post_id_for_error}: Could not find counts area (engage-bar or action-container). Counts will be 0.")
                      counts_area = None # Ensure it's None if not found
                  else:
                       print("Using fallback counts area: div.action-container")
@@ -524,7 +524,7 @@ class XHSCrawler:
                             post_detail["collections"] = int(collection_text)
                     print(f"Collection count: {post_detail['collections']}")
                 except Exception as e:
-                    print(f"Note {note_id_for_error}: Error extracting collection count: {e}")
+                    print(f"Post {post_id_for_error}: Error extracting collection count: {e}")
                 
                 # --- Comments --- #
                 try:
@@ -538,7 +538,7 @@ class XHSCrawler:
                             post_detail["comments"] = int(comment_text)
                     print(f"Comment count: {post_detail['comments']}")
                 except Exception as e:
-                    print(f"Note {note_id_for_error}: Error extracting comment count: {e}")
+                    print(f"Post {post_id_for_error}: Error extracting comment count: {e}")
             
             # --- Attempt Random Like before closing ---
             await self.random_like_post()
@@ -561,7 +561,7 @@ class XHSCrawler:
             
             return post_detail
         except Exception as e:
-            print(f"Error processing post detail for note {note_id_for_error}: {e}")
+            print(f"Error processing post detail for post {post_id_for_error}: {e}")
             # Clean up handles
             if cover_element: await cover_element.dispose()
             # Try to close if still open
@@ -669,7 +669,7 @@ class XHSCrawler:
                     if "data_index" in post_data:
                         del post_data["data_index"] # Remove internal index before saving
                     posts_data.append(post_data)
-                    print(f"Successfully processed post index {expected_index} (ID: {post_data.get('note_id', 'N/A')}).")
+                    print(f"Successfully processed post index {expected_index} (ID: {post_data.get('post_id', 'N/A')}).")
                 else:
                     print(f"Failed to get details for post index {expected_index}. Skipping.")
 

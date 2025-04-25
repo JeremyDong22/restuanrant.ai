@@ -32,11 +32,11 @@ RELOCATE_EMULATOR = False
 
 # Set to True to automatically obtain a new Xiaohongshu cookie, False to use existing.
 # Normally, we turn it on for the first time we run the pipeline.
-GET_NEW_XHS_COOKIE = False
+GET_NEW_XHS_COOKIE = True
 
 # Set to True to open a new permanent browser window for Xiaohongshu interaction, False otherwise.
 # Normally, we turn it on for the first time we run the pipeline, the browser will be opened in the background.
-OPEN_NEW_BROWSER = True
+OPEN_NEW_BROWSER = False
 
 # Set to True to perform cleanup operations (e.g., closing emulator/browser) at the end, False to skip.
 # Normally, we want to perform cleanup at the end of the pipeline.

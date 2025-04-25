@@ -50,14 +50,14 @@ def get_mime_type(extension):
 # --- End MIME Type Helper ---
 
 
-def upload_image_to_supabase(note_id, img_url, index):
+def upload_image_to_supabase(post_id, img_url, index):
     """
     Downloads an image from a URL into memory and uploads it to Supabase Storage.
 
     Args:
-        note_id (str): The note ID, used for structuring the path in Supabase.
+        post_id (str): The post ID, used for structuring the path in Supabase.
         img_url (str): The URL of the image to download.
-        index (int): The index of the image for this note_id (for naming).
+        index (int): The index of the image for this post_id (for naming).
 
     Returns:
         bool: True if upload was successful or skipped, False otherwise.
@@ -81,7 +81,7 @@ def upload_image_to_supabase(note_id, img_url, index):
         # Ensure the filename is URL-safe for Supabase path
         safe_image_filename = quote(image_filename)
 
-        supabase_path = f"{note_id}/{safe_image_filename}"
+        supabase_path = f"{post_id}/{safe_image_filename}"
 
         # --- Download image into memory ---
         print(f"  Attempting to download: {img_url}")
@@ -98,7 +98,7 @@ def upload_image_to_supabase(note_id, img_url, index):
         print(f"  Uploading {image_filename} to Supabase path: {supabase_path}")
         mime_type = get_mime_type(file_ext)
 
-        # Check if file exists in Supabase before uploading - This check is now done earlier at the note_id level
+        # Check if file exists in Supabase before uploading - This check is now done earlier at the post_id level
         # We still use upsert=false here as a fallback or for partial uploads, but the primary check is above.
         try:
             # Pass the raw image bytes directly to the upload function
@@ -112,7 +112,7 @@ def upload_image_to_supabase(note_id, img_url, index):
         except Exception as upload_error:
             # Check if the error is because the file already exists
             if 'duplicate key value violates unique constraint' in str(upload_error) or 'The resource already exists' in str(upload_error) or 'already exists' in str(upload_error).lower():
-                 # This case should be less frequent now due to the note_id check, but kept as safety
+                 # This case should be less frequent now due to the post_id check, but kept as safety
                  print(f"  Skipping {image_filename}, already exists in Supabase at {supabase_path}.")
                  return True # Treat as success because the file is there
             else:
@@ -155,40 +155,40 @@ def process_json_file(json_file_path):
         return
 
     for item in data:
-        note_id = item.get('note_id')
+        post_id = item.get('post_id')
         images_str = item.get('images')
 
-        if not note_id or not images_str:
-            print(f"Warning: Missing 'note_id' or 'images' in an item within {json_file_path.name}")
+        if not post_id or not images_str:
+            print(f"Warning: Missing 'post_id' or 'images' in an item within {json_file_path.name}")
             continue
 
         image_urls = [url.strip() for url in images_str.split(',') if url.strip()]
         expected_image_count = len(image_urls)
 
         if not image_urls:
-            print(f"Warning: No image URLs found for note_id {note_id} in {json_file_path.name}")
+            print(f"Warning: No image URLs found for post_id {post_id} in {json_file_path.name}")
             continue
 
-        print(f"Processing note_id: {note_id} (from {json_file_path.name}) - Expecting {expected_image_count} images.")
+        print(f"Processing post_id: {post_id} (from {json_file_path.name}) - Expecting {expected_image_count} images.")
 
         # --- Check Supabase first ---
         try:
-            existing_files = supabase.storage.from_(SUPABASE_BUCKET).list(path=note_id)
+            existing_files = supabase.storage.from_(SUPABASE_BUCKET).list(path=post_id)
             # Filter out potential placeholder objects if storage creates them for empty folders
             # Supabase list() might return a placeholder - check specifics if needed
             # A simple check is len(existing_files) > 0 if the folder itself exists
             actual_file_count = len([f for f in existing_files if f.get('id') is not None]) # Count actual files
 
             if actual_file_count >= expected_image_count:
-                print(f"  Skipping note_id {note_id}: Found {actual_file_count} existing files in Supabase (expected {expected_image_count}).")
+                print(f"  Skipping post_id {post_id}: Found {actual_file_count} existing files in Supabase (expected {expected_image_count}).")
                 continue # Skip to the next item in the JSON
             else:
-                print(f"  Found {actual_file_count} existing files in Supabase for note_id {note_id}. Proceeding with upload check.")
+                print(f"  Found {actual_file_count} existing files in Supabase for post_id {post_id}. Proceeding with upload check.")
 
         except Exception as list_error:
             # If listing fails (e.g., RLS issues, bucket not found), log error and proceed cautiously
             # Or decide to stop if this check is critical
-            print(f"  Warning: Could not list files for note_id {note_id} in Supabase: {list_error}. Proceeding without skip check.")
+            print(f"  Warning: Could not list files for post_id {post_id} in Supabase: {list_error}. Proceeding without skip check.")
             # Fall through to process images individually
         # --- End Check Supabase ---
 
@@ -200,13 +200,13 @@ def process_json_file(json_file_path):
             time.sleep(0.1) # 100ms delay between downloads/uploads
 
             # upload_image_to_supabase now handles the final check/skip via upsert=false
-            # but the main skip logic is the note_id check above.
-            if upload_image_to_supabase(note_id, img_url, i):
+            # but the main skip logic is the post_id check above.
+            if upload_image_to_supabase(post_id, img_url, i):
                 success_count += 1
             else:
                 fail_count += 1
 
-        print(f"  Finished processing note_id {note_id}. Success/Skipped: {success_count}, Failed: {fail_count}")
+        print(f"  Finished processing post_id {post_id}. Success/Skipped: {success_count}, Failed: {fail_count}")
 
 
 def find_and_process_json_files():

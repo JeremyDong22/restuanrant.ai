@@ -1,7 +1,7 @@
 # upload.py
 # Script to upload scraped Xiaohongshu data from the 'data' directory to Supabase 'posts' and 'post_brand' tables.
-# Handles duplicates by checking existing note_ids in 'posts'.
-# Generates image URLs based on note_id: https://.../xhs_image/{note_id}/image{index}.jpg
+# Handles duplicates by checking existing post_ids in 'posts'.
+# Generates image URLs based on post_id: https://.../xhs_image/{post_id}/image{index}.jpg
 # Corrected data directory path to be relative to the script location.
 # Added exit(1) if brand_id_map fails to load to prevent inconsistent state.
 # Added .strip() to brand name mapping and lookup to handle potential whitespace issues.
@@ -112,18 +112,18 @@ def get_brand_id_map():
     return brand_map
 
 def get_existing_post_ids():
-    """Fetches all existing note_ids from the posts table."""
+    """Fetches all existing post_ids from the posts table."""
     existing_ids = set()
     try:
-        print(f"Fetching existing note_ids from table: {POSTS_TABLE_NAME}...")
-        # Fetch all note_ids - consider pagination for very large tables
+        print(f"Fetching existing post_ids from table: {POSTS_TABLE_NAME}...")
+        # Fetch all post_ids - consider pagination for very large tables
         current_page = 0
         page_size = 1000 # Supabase default limit
         while True:
-            response = supabase.table(POSTS_TABLE_NAME).select("note_id", count='exact').range(current_page * page_size, (current_page + 1) * page_size - 1).execute()
+            response = supabase.table(POSTS_TABLE_NAME).select("post_id", count='exact').range(current_page * page_size, (current_page + 1) * page_size - 1).execute()
             if response.data:
                  for post in response.data:
-                      existing_ids.add(post['note_id'])
+                      existing_ids.add(post['post_id'])
                  # Check if we fetched less than the page size, meaning it's the last page
                  if len(response.data) < page_size or response.count is not None and len(existing_ids) >= response.count:
                      break
@@ -131,12 +131,12 @@ def get_existing_post_ids():
             else:
                  # No more data or an error occurred
                  if hasattr(response, 'error') and response.error:
-                      print(f"Error fetching existing note_ids (page {current_page}): {response.error}")
+                      print(f"Error fetching existing post_ids (page {current_page}): {response.error}")
                  break # Stop fetching if no data or error
 
-        print(f"Successfully fetched {len(existing_ids)} existing note_ids.")
+        print(f"Successfully fetched {len(existing_ids)} existing post_ids.")
     except Exception as e:
-        print(f"Error fetching existing note_ids from Supabase: {e}")
+        print(f"Error fetching existing post_ids from Supabase: {e}")
         print("Warning: Proceeding without checking for duplicates. Duplicate posts might be inserted if script is re-run.")
         # Return empty set to avoid blocking uploads, but duplicates are possible
     return existing_ids
@@ -219,14 +219,14 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
     print("Processing records: filtering duplicates, formatting data, generating image URLs...")
     for record in tqdm(data, desc="Processing records"):
         processed_count += 1
-        note_id = record.get("note_id")
+        post_id = record.get("post_id")
 
-        if not note_id:
-            print(f"Warning: Record missing note_id. Skipping: {record.get('title', 'N/A')}")
+        if not post_id:
+            print(f"Warning: Record missing post_id. Skipping: {record.get('title', 'N/A')}")
             continue
 
         # --- Deduplication Check (Only for posts, not for brand relations) ---
-        is_duplicate = note_id in existing_post_ids
+        is_duplicate = post_id in existing_post_ids
         if is_duplicate:
             skipped_duplicates += 1
             # 记录这是一个重复帖子，但继续处理以处理潜在的新品牌关联和更新动态信息
@@ -235,7 +235,7 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
         # --- Prepare Post Data ---
         formatted_publish_date = format_publish_date(record.get("publish_date"))
 
-        # Generate Image URLs based on note_id
+        # Generate Image URLs based on  post_id
         original_images_str = record.get("images", "")
         supabase_image_urls = []
         if original_images_str:
@@ -245,18 +245,18 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
                 for i, _ in enumerate(original_urls):
                     image_filename = f"image{i + 1}.jpg"
                     # URL-encode components safely
-                    safe_note_id = quote(str(note_id))
+                    safe_post_id = quote(str(post_id))
                     safe_image_filename = quote(image_filename)
                     # Construct the Supabase public URL path
-                    supabase_path = f"{SUPABASE_STORAGE_BASE_URL}/{IMAGE_BUCKET_NAME}/{safe_note_id}/{safe_image_filename}"
+                    supabase_path = f"{SUPABASE_STORAGE_BASE_URL}/{IMAGE_BUCKET_NAME}/{safe_post_id}/{safe_image_filename}"
                     supabase_image_urls.append(supabase_path)
             except Exception as img_e:
-                 print(f"Warning: Error processing image string for note {note_id}: '{original_images_str}'. Error: {img_e}")
+                 print(f"Warning: Error processing image string for post {post_id}: '{original_images_str}'. Error: {img_e}")
                  supabase_image_urls = [] # Reset on error
 
         # Handle potential missing keys gracefully, defaulting to None or 0
         post_payload = {
-            "note_id": note_id,
+            "post_id": post_id,
             "likes": int(record.get("likes", 0)) if record.get("likes") is not None else None,
             "title": record.get("title"),
             "author": record.get("author"),
@@ -270,7 +270,7 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
         # 新增：为已存在的帖子创建简化的更新载荷（只包含动态变化的数据）
         if is_duplicate:
             update_payload = {
-                "note_id": note_id, # 主键，用于匹配
+                "post_id": post_id, # 主键，用于匹配
                 "likes": int(record.get("likes", 0)) if record.get("likes") is not None else None,
                 "collections": int(record.get("collections", 0)) if record.get("collections") is not None else None,
                 "comments": int(record.get("comments", 0)) if record.get("comments") is not None else None,
@@ -291,15 +291,15 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
             brand_id = brand_id_map.get(lookup_key)
             if brand_id:
                 post_brand_payload = {
-                    "post_id": note_id, # Matches posts.note_id
+                    "post_id": post_id, # Matches posts.post_id
                     "brand_id": brand_id # Matches brand.brand_id
                 }
                 post_brand_relations_to_insert.append(post_brand_payload)
                 if is_duplicate:
-                    print(f"Note: Creating new brand relation for existing post {note_id} with brand '{brand_name}' (ID: {brand_id})")
+                    print(f"Note: Creating new brand relation for existing post {post_id} with brand '{brand_name}' (ID: {brand_id})")
             else:
                 # Use lookup_key (lower, stripped) in warning message for clarity
-                print(f"Warning: Brand ID not found for brand '{lookup_key}' (original: '{brand_name}') in record with note_id '{note_id}'. No post_brand relation created.")
+                print(f"Warning: Brand ID not found for brand '{lookup_key}' (original: '{brand_name}') in record with post_id '{post_id}'. No post_brand relation created.")
         # --- End Prepare Post-Brand Relation Data ---
 
     print(f"Processing complete. Found {len(posts_to_insert)} new posts to insert and {update_count} existing posts to update.")
@@ -347,15 +347,15 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
             batch = posts_to_update[i*BATCH_SIZE:(i+1)*BATCH_SIZE]
             try:
                 for post in batch:
-                    note_id = post.get('note_id')
-                    if note_id:
+                    post_id = post.get('post_id')
+                    if post_id:
                         # 使用update而非upsert，因为我们确定记录已存在
-                        update_data = {k: v for k, v in post.items() if k != 'note_id'}
-                        result = supabase.table(POSTS_TABLE_NAME).update(update_data).eq('note_id', note_id).execute()
+                        update_data = {k: v for k, v in post.items() if k != 'post_id'}
+                        result = supabase.table(POSTS_TABLE_NAME).update(update_data).eq('post_id', post_id).execute()
                         if result.data:
                             updated_posts_count += len(result.data)
                         elif hasattr(result, 'error') and result.error:
-                            print(f"API Error updating post {note_id}: {result.error}")
+                            print(f"API Error updating post {post_id}: {result.error}")
                             failed_updates.append(post)
             except Exception as e:
                 print(f"Exception updating post batch {i + 1}/{num_batches}: {e}")
@@ -439,7 +439,7 @@ def main():
             # Add newly uploaded post IDs to the set to prevent duplicates *within the same run*
             # if processing multiple files that might contain the same new post.
             if posts_count > 0:
-                 newly_added_ids = {post['note_id'] for post in data if post.get('note_id') and post['note_id'] not in existing_post_ids}
+                 newly_added_ids = {post['post_id'] for post in data if post.get('post_id') and post['post_id'] not in existing_post_ids}
                  existing_post_ids.update(newly_added_ids)
 
 
