@@ -2,6 +2,7 @@
 # Updated by AI assistant: Added user prompt to skip XHS login steps if already logged in.
 # Updated by AI assistant: Modified run_script to stream output directly.
 # Updated by AI assistant: Updated refresh.py and get_brand.py paths to dzdp_crawler and xhs_crawler folders respectively.
+# Updated by AI assistant: Added step 3.4 to upload XHS images directly.
 # Created by AI assistant.
 # main/main.py
 # Main controller script for the pipeline.
@@ -21,6 +22,20 @@ from pathlib import Path
 # Define paths relative to this script's location
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent # Assuming main.py is in a subdirectory like 'main'
+
+# --- Add project root to Python path --- 
+# This ensures Python can find modules in sibling directories (like xhs_crawler)
+# when running main.py directly.
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+# --- End Path Addition ---
+
+# --- Import the new content filter function --- 
+from xhs_crawler.content_filter import filter_json_files
+# --- Import XHS image upload function --- 
+from xhs_crawler import image_direct_upload
+
+# Define other necessary paths using the already defined PROJECT_ROOT and SCRIPT_DIR
 DZDP_CRAWLER_DIR = PROJECT_ROOT / "dzdp_crawler"
 XHS_CRAWLER_DIR = PROJECT_ROOT / "xhs_crawler"
 DZDP_CONFIG_PATH = os.path.join(DZDP_CRAWLER_DIR, 'Config.py')
@@ -242,32 +257,48 @@ if __name__ == "__main__":
             # Decide whether to stop or continue with potentially stale brands
         else:
             print("Brand table refreshed.")
-
-        print("\nStep 3.1b: Getting brands and updating XHS config...")
-        # Now uses the modified run_script with updated path to xhs_crawler
-        if not run_script(["get_brand.py"], cwd=XHS_CRAWLER_DIR, description="Get Brands & Update XHS Config"):
-            print("Error getting brands or updating XHS config. Stopping XHS module.")
-        else:
-            print("XHS config updated.")
-
-            # Step 3.2: Run XHS Crawler - Now uses the modified run_script
-            if not run_script(["crawler.py"], cwd=XHS_CRAWLER_DIR, description="XHS Crawl Posts"):
-                print("Error during XHS crawl. Stopping XHS module.")
+            print("\nStep 3.1b: Getting Brand Names for XHS Config...")
+            if not run_script(["get_brand.py"], cwd=XHS_CRAWLER_DIR, description="Get Brands for XHS Config"):
+                print("Error getting brands for XHS config. Stopping XHS module.")
             else:
-                # Step 3.3: Upload Data - Now uses the modified run_script
-                if not run_script(["upload.py"], cwd=XHS_CRAWLER_DIR, description="XHS Upload Data"):
-                    print("Error uploading XHS data.")
-                    # Decide if we should stop or attempt image upload anyway
+                print("Brand names updated in XHS Config.py.")
+                # Step 3.2: Run XHS Crawler
+                print("\nStep 3.2: Running XHS Crawler...")
+                if not run_script(["xhs_crawler.py"], cwd=XHS_CRAWLER_DIR, description="XHS Crawl"):
+                    print("Error during XHS crawl. Stopping XHS module.")
                 else:
-                    print("XHS data upload completed.")
-                    # Step 3.4: Direct Image Upload to Supabase - Now uses the modified run_script
-                    if not run_script(["image_direct_upload.py"], cwd=XHS_CRAWLER_DIR, description="XHS Direct Image Upload"):
-                        print("Error during direct XHS image upload.")
+                    print("XHS crawling complete.")
+                    # Step 3.2.5: Filter XHS JSON content
+                    print("\nStep 3.2.5: Filtering XHS JSON Content...")
+                    try:
+                        filter_json_files(XHS_CRAWLER_DIR / "data") # Call the imported filter function
+                        print("XHS JSON content filtering complete.")
+                    except Exception as filter_e:
+                        print(f"Error during XHS JSON content filtering: {filter_e}")
+                        # Decide if this error should stop the pipeline
+                        # print("Stopping XHS module due to filtering error.")
+                        # sys.exit(1) # Optional exit
+                        print("Continuing XHS module despite filtering error.")
+
+                    # Step 3.3: Upload XHS Data
+                    print("\nStep 3.3: Uploading XHS Data (posts and relations)...")
+                    if not run_script(["upload.py"], cwd=XHS_CRAWLER_DIR, description="XHS Upload Data"):
+                         print("Error during XHS data upload. Stopping XHS module.")
                     else:
-                        print("XHS Crawling Module Completed Successfully.")
+                         print("XHS data upload complete.")
+                         # --- ADDED STEP 3.4 --- 
+                         print("\nStep 3.4: Uploading XHS Images directly to Storage...")
+                         try:
+                             # Call the main function from the imported image upload script
+                             image_direct_upload.find_and_process_json_files()
+                             print("XHS image direct upload process finished.")
+                         except Exception as img_upload_e:
+                             print(f"Error during XHS image direct upload: {img_upload_e}")
+                             # Decide if this should be fatal or just a warning
+                             print("Continuing pipeline despite image upload error.")
+                         # --- END ADDED STEP 3.4 ---
 
-
-        print("===== Module 3: XHS Crawling & Image Upload Complete =====")
+        print("===== Module 3: XHS Crawling Complete =====")
 
         # --- Module 4: Cleanup (Conditional based on config) ---
         print("\n===== Module 4: Cleanup =======")
