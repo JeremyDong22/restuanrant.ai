@@ -1,6 +1,7 @@
 # upload.py
 # Script to upload scraped Xiaohongshu data from the 'data' directory to Supabase 'posts' and 'post_brand' tables.
 # Handles duplicates by checking existing post_ids in 'posts'.
+# If a post exists, it updates likes, collections, comments, and ALSO updates images if the new image list differs.
 # Generates image URLs based on post_id: https://.../xhs_image/{post_id}/image{index}.jpg
 # Corrected data directory path to be relative to the script location.
 # Added exit(1) if brand_id_map fails to load to prevent inconsistent state.
@@ -225,36 +226,33 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
             print(f"Warning: Record missing post_id. Skipping: {record.get('title', 'N/A')}")
             continue
 
-        # --- Deduplication Check (Only for posts, not for brand relations) ---
+        # --- Deduplication Check ---
         is_duplicate = post_id in existing_post_ids
         if is_duplicate:
             skipped_duplicates += 1
-            # 记录这是一个重复帖子，但继续处理以处理潜在的新品牌关联和更新动态信息
+            # Existing post found, proceed to check data for updates
         # --- End Deduplication Check ---
 
-        # --- Prepare Post Data ---
+        # --- Prepare Post Data (Always needed for comparison or insert) ---
         formatted_publish_date = format_publish_date(record.get("publish_date"))
 
-        # Generate Image URLs based on  post_id
+        # Generate Image URLs from current record
         original_images_str = record.get("images", "")
-        supabase_image_urls = []
+        supabase_image_urls = [] # Newly generated URLs
         if original_images_str:
             try:
-                # Assuming images are comma-separated URLs or paths
                 original_urls = [url.strip() for url in original_images_str.split(',') if url.strip()]
                 for i, _ in enumerate(original_urls):
                     image_filename = f"image{i + 1}.jpg"
-                    # URL-encode components safely
                     safe_post_id = quote(str(post_id))
                     safe_image_filename = quote(image_filename)
-                    # Construct the Supabase public URL path
                     supabase_path = f"{SUPABASE_STORAGE_BASE_URL}/{IMAGE_BUCKET_NAME}/{safe_post_id}/{safe_image_filename}"
                     supabase_image_urls.append(supabase_path)
             except Exception as img_e:
                  print(f"Warning: Error processing image string for post {post_id}: '{original_images_str}'. Error: {img_e}")
-                 supabase_image_urls = [] # Reset on error
+                 supabase_image_urls = []
 
-        # Handle potential missing keys gracefully, defaulting to None or 0
+        # Prepare the full payload, used for inserts
         post_payload = {
             "post_id": post_id,
             "likes": int(record.get("likes", 0)) if record.get("likes") is not None else None,
@@ -262,47 +260,64 @@ def process_and_upload_posts(data, brand_id_map, existing_post_ids):
             "author": record.get("author"),
             "publish_date": formatted_publish_date,
             "content": record.get("content"),
-            "images": supabase_image_urls, # Store as a list for TEXT[]
+            "images": supabase_image_urls,
             "collections": int(record.get("collections", 0)) if record.get("collections") is not None else None,
             "comments": int(record.get("comments", 0)) if record.get("comments") is not None else None,
         }
-        
-        # 新增：为已存在的帖子创建简化的更新载荷（只包含动态变化的数据）
+
         if is_duplicate:
+            # --- Prepare Update Payload for Existing Post ---
             update_payload = {
-                "post_id": post_id, # 主键，用于匹配
-                "likes": int(record.get("likes", 0)) if record.get("likes") is not None else None,
-                "collections": int(record.get("collections", 0)) if record.get("collections") is not None else None,
-                "comments": int(record.get("comments", 0)) if record.get("comments") is not None else None,
+                "post_id": post_id, # Needed for matching during update later
+                "likes": post_payload["likes"],
+                "collections": post_payload["collections"],
+                "comments": post_payload["comments"],
             }
+
+            # --- Fetch and Compare Images for Update ---
+            try:
+                # Fetch existing images for this specific post
+                image_res = supabase.table(POSTS_TABLE_NAME).select('images').eq('post_id', post_id).maybe_single().execute()
+                existing_images = []
+                if image_res.data and image_res.data.get('images') is not None:
+                    existing_images = image_res.data['images']
+                
+                # Compare sets of URLs (order doesn't matter)
+                if set(existing_images) != set(supabase_image_urls):
+                    print(f"Post {post_id}: Image difference detected. Scheduling image update.")
+                    update_payload["images"] = supabase_image_urls # Add images to update payload
+                # else: # Optional: Log if images are the same
+                #     print(f"Post {post_id}: Images are the same. Skipping image update.")
+
+            except Exception as fetch_img_e:
+                print(f"Warning: Could not fetch/compare images for existing post {post_id}. Error: {fetch_img_e}. Images will not be updated.")
+            # --- End Image Comparison ---
+
             posts_to_update.append(update_payload)
             update_count += 1
         else:
-            # 新帖子完整插入
+            # New post, add full payload for insertion
             posts_to_insert.append(post_payload)
         # --- End Prepare Post Data ---
 
-        # --- Prepare Post-Brand Relation Data ---
-        # 不管帖子是否存在，都处理品牌关联
+        # --- Prepare Post-Brand Relation Data (Handles both new and existing posts) ---
         brand_name = record.get("brand")
         if brand_name:
-            # Use lowercased stripped key for lookup
             lookup_key = brand_name.strip().lower()
             brand_id = brand_id_map.get(lookup_key)
             if brand_id:
                 post_brand_payload = {
-                    "post_id": post_id, # Matches posts.post_id
-                    "brand_id": brand_id # Matches brand.brand_id
+                    "post_id": post_id,
+                    "brand_id": brand_id
                 }
+                # Add to list regardless of whether post is new or duplicate
                 post_brand_relations_to_insert.append(post_brand_payload)
-                if is_duplicate:
-                    print(f"Note: Creating new brand relation for existing post {post_id} with brand '{brand_name}' (ID: {brand_id})")
+                # Optional logging added previously handles the duplicate case message
             else:
-                # Use lookup_key (lower, stripped) in warning message for clarity
                 print(f"Warning: Brand ID not found for brand '{lookup_key}' (original: '{brand_name}') in record with post_id '{post_id}'. No post_brand relation created.")
         # --- End Prepare Post-Brand Relation Data ---
 
-    print(f"Processing complete. Found {len(posts_to_insert)} new posts to insert and {update_count} existing posts to update.")
+    print(f"Processing complete. Found {len(posts_to_insert)} new posts to insert and {update_count} existing posts to update (may include image updates).")
     print(f"Skipped {skipped_duplicates} duplicates (but will update their dynamic data).")
     print(f"Created {len(post_brand_relations_to_insert)} post-brand relations (including relations for existing posts).")
 

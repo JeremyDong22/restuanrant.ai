@@ -411,8 +411,9 @@ class XHSCrawler:
             detail_mask = self.page.locator(detail_page_selector)
             print("Note detail mask appeared.")
             
-            # Extract note ID from the mask attribute if possible, fallback to URL
-            post_id = await detail_mask.get_attribute("post-id")
+            # Extract note ID from the mask attribute if possible, fallback to URL. 
+            # In Element, note-id is correct but we call it post-id.
+            post_id = await detail_mask.get_attribute("note-id")
             if not post_id:
                  print("Could not get post-id from mask attribute, trying URL.")
                  try:
@@ -669,7 +670,7 @@ class XHSCrawler:
                     if "data_index" in post_data:
                         del post_data["data_index"] # Remove internal index before saving
                     posts_data.append(post_data)
-                    print(f"Successfully processed post index {expected_index} (ID: {post_data.get('post_id', 'N/A')}).")
+                    print(f"Successfully processed post index {expected_index} (ID: {post_data.get('note_id', 'N/A')}).")
                 else:
                     print(f"Failed to get details for post index {expected_index}. Skipping.")
 

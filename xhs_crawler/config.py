@@ -17,7 +17,9 @@ load_dotenv(dotenv_path=DOTENV_PATH)
 
 # List of brands to crawl (This will be overwritten by pipeline_controller.py)
 BRANDS = [
+    
     "黑丁",
+    "姜虎东白丁",
 ] # Updated by xhs_crawler/get_brand.py
 
 # Minimum number of likes required for a post to be crawled
